@@ -1,0 +1,22 @@
+[package]
+name = "gacha-url"
+version = "0.2.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+minreq = { version = "2", features = ["https-native", "json-using-serde"] }
+regex-lite = "0.1"
+serde_json = "1"
+url = "2"
+vc-ltl = "5"
+idna_adapter = "=1.0.0" # to disable IDNA encoding
+winsafe = { version = "0.0.22", features = ["advapi", "gui", "shell"] }
+
+[build-dependencies]
+embed-resource = "3"
+
+[profile.release]
+lto = true
+strip = true
+opt-level = "s"
