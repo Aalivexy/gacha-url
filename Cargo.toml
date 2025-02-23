@@ -18,5 +18,6 @@ embed-resource = "3"
 
 [profile.release]
 lto = true
-strip = true
+strip = "symbols"
 opt-level = "s"
+codegen-units = 1
