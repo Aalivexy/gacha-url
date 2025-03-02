@@ -146,12 +146,12 @@ impl MainWindow {
                 }
             };
             // 将所有权转移给系统
-            let ptr = Box::into_raw(Box::new(c_string)) as *mut u8;
-            match unsafe { SetClipboardData(CF::TEXT, ptr) } {
+            let ptr = c_string.into_raw();
+            match unsafe { SetClipboardData(CF::TEXT, ptr as *mut u8) } {
                 Ok(_) => self.set_status("已复制到剪贴板"),
                 Err(e) => {
                     // 设置失败，手动释放内存
-                    let _ = unsafe { Box::from_raw(ptr as *mut std::ffi::CString) };
+                    drop(unsafe { std::ffi::CString::from_raw(ptr as *mut i8) });
                     self.set_status(&format!("无法复制到剪贴板：{}", e));
                 }
             }
