@@ -133,6 +133,11 @@ impl MainWindow {
 
     fn set_clipboard(&self, text: &str) {
         if let Ok(_hclip_guard) = self.wnd.hwnd().OpenClipboard() {
+            // 需要先清空剪贴板
+            if !EmptyClipboard().is_ok() {
+                self.set_status("无法清空剪贴板");
+                return;
+            }
             let c_string = match std::ffi::CString::new(text) {
                 Ok(s) => s,
                 Err(_) => {
@@ -140,9 +145,15 @@ impl MainWindow {
                     return;
                 }
             };
-            match unsafe { SetClipboardData(CF::TEXT, c_string.into_raw() as *mut u8) } {
+            // 将所有权转移给系统
+            let ptr = Box::into_raw(Box::new(c_string)) as *mut u8;
+            match unsafe { SetClipboardData(CF::TEXT, ptr) } {
                 Ok(_) => self.set_status("已复制到剪贴板"),
-                Err(e) => self.set_status(&format!("无法复制到剪贴板：{}", e)),
+                Err(e) => {
+                    // 设置失败，手动释放内存
+                    let _ = unsafe { Box::from_raw(ptr as *mut std::ffi::CString) };
+                    self.set_status(&format!("无法复制到剪贴板：{}", e));
+                }
             }
         } else {
             self.set_status("无法打开剪贴板");
