@@ -27,9 +27,9 @@ pub struct MainWindow {
 impl MainWindow {
     pub fn new() -> Self {
         let wnd = gui::WindowMain::new(gui::WindowMainOpts {
-            title: "获取抽卡链接".to_owned(),
+            title: "获取抽卡链接",
             class_icon: gui::Icon::Id(101),
-            size: (400, 265),
+            size: (600, 400),
             style: gui::WindowMainOpts::default().style
                 | co::WS::MINIMIZEBOX
                 | co::WS::MAXIMIZEBOX
@@ -41,8 +41,8 @@ impl MainWindow {
             &wnd,
             gui::ComboBoxOpts {
                 position: (10, 8),
-                width: 180,
-                items: GAMES.iter().map(|&s| s.to_owned()).collect(),
+                width: 270,
+                items: &GAMES,
                 selected_item: config::load_last_game(),
                 ..Default::default()
             },
@@ -51,8 +51,8 @@ impl MainWindow {
         let btn_get = gui::Button::new(
             &wnd,
             gui::ButtonOpts {
-                text: "获取".to_owned(),
-                position: (209, 5),
+                text: "获取",
+                position: (318, 5),
                 resize_behavior: (gui::Horz::Repos, gui::Vert::None),
                 ..Default::default()
             },
@@ -61,8 +61,8 @@ impl MainWindow {
         let btn_copy = gui::Button::new(
             &wnd,
             gui::ButtonOpts {
-                text: "复制".to_owned(),
-                position: (302, 5),
+                text: "复制",
+                position: (458, 5),
                 resize_behavior: (gui::Horz::Repos, gui::Vert::None),
                 ..Default::default()
             },
@@ -71,10 +71,10 @@ impl MainWindow {
         let url_preview = gui::Edit::new(
             &wnd,
             gui::EditOpts {
-                position: (10, 40),
-                width: 380,
-                height: 200,
-                edit_style: ES::MULTILINE
+                position: (10, 50),
+                width: 580,
+                height: 310,
+                control_style: ES::MULTILINE
                     | ES::WANTRETURN
                     | ES::AUTOVSCROLL
                     | ES::NOHIDESEL
@@ -108,7 +108,7 @@ impl MainWindow {
     }
 
     fn get_url(&self) -> String {
-        if let Some(s) = self.games.items().selected_text() {
+        if let Ok(Some(s)) = self.games.items().selected_text() {
             let game = match s.as_str() {
                 "原神" => GameType::Hk4eCN,
                 "Genshin Impact" => GameType::Hk4eGlobal,
@@ -132,26 +132,14 @@ impl MainWindow {
     }
 
     fn set_clipboard(&self, text: &str) {
-        if let Ok(_hclip_guard) = self.wnd.hwnd().OpenClipboard() {
-            // 需要先清空剪贴板
-            if !EmptyClipboard().is_ok() {
+        if let Ok(hclip) = self.wnd.hwnd().OpenClipboard() {
+            if hclip.EmptyClipboard().is_err() {
                 self.set_status("无法清空剪贴板");
                 return;
             }
-            let c_string = match std::ffi::CString::new(text) {
-                Ok(s) => s,
-                Err(_) => {
-                    self.set_status("链接包含无效字符");
-                    return;
-                }
-            };
-            // 将所有权转移给系统
-            let ptr = c_string.into_raw();
-            match unsafe { SetClipboardData(CF::TEXT, ptr as *mut u8) } {
+            match hclip.SetClipboardData(CF::TEXT, text.as_bytes()) {
                 Ok(_) => self.set_status("已复制到剪贴板"),
                 Err(e) => {
-                    // 设置失败，手动释放内存
-                    drop(unsafe { std::ffi::CString::from_raw(ptr as *mut i8) });
                     self.set_status(&format!("无法复制到剪贴板：{}", e));
                 }
             }
@@ -162,32 +150,29 @@ impl MainWindow {
 
     fn events(&self) {
         let self2 = self.clone();
-        self.wnd.on().wm_create(move |_| {
-            self2.url_preview.set_text(&self2.get_url());
-            Ok(0)
-        });
+        self.wnd
+            .on()
+            .wm_create(move |_| Ok(self2.url_preview.set_text(&self2.get_url()).map(|_| 0)?));
 
         let self2 = self.clone();
         self.games.on().cbn_sel_change(move || {
-            if let Some(s) = self2.games.items().selected_text() {
+            if let Ok(Some(s)) = self2.games.items().selected_text() {
                 GAMES
                     .iter()
                     .position(|&g| g == s)
                     .map(|i| save_last_game(i.try_into().unwrap()));
             }
-            self2.url_preview.set_text(&self2.get_url());
-            Ok(())
+            Ok(self2.url_preview.set_text(&self2.get_url())?)
         });
 
         let self2 = self.clone();
-        self.btn_get.on().bn_clicked(move || {
-            self2.url_preview.set_text(&self2.get_url());
-            Ok(())
-        });
+        self.btn_get
+            .on()
+            .bn_clicked(move || Ok(self2.url_preview.set_text(&self2.get_url())?));
 
         let self2 = self.clone();
         self.btn_copy.on().bn_clicked(move || {
-            let text = self2.url_preview.text();
+            let text = self2.url_preview.text().unwrap_or_default();
             if text.is_empty() {
                 self2.set_status("没有链接可复制");
             } else {
